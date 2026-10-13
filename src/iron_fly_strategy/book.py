@@ -63,7 +63,7 @@ class FlyBook:
         self.spot: float | None = None
         self._first_credit: float | None = None
         self._last_credit: float | None = None
-        self.regime: str = "s1"
+        self.regime: str = "s3"
         self.stop_pad: int = 0
 
     def open_fly(

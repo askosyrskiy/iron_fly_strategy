@@ -26,7 +26,6 @@ from iron_fly_strategy.rules import (
     wings_for_clock,
 )
 from iron_fly_strategy.view import (
-    BLOTTER_MAX,
     CaptainsLog,
     FlyRow,
     empty_blotter,
@@ -330,7 +329,7 @@ class FlyBook:
         wall = book_clock(clock)
         up, down = self.watches(last, wall)
         wings = wings_for_clock(wall)
-        used = self.flies[:BLOTTER_MAX]
+        used = self.flies
         if not used:
             rows = empty_blotter(1)
         else:

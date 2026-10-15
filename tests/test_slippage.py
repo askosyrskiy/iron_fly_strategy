@@ -26,6 +26,22 @@ def test_clock_pick_replaces_slippage_while_it_is_on():
     assert slippage_now(spec, wall=time(15, 55)) == 0.7
 
 
+def test_view_model_keeps_flies_past_the_old_blotter_cap():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from iron_fly_strategy.book import FlyBook
+
+    book = FlyBook()
+    when = datetime(2026, 10, 5, 10, 40, tzinfo=ZoneInfo("America/New_York"))
+    for offset in range(21):
+        book.open_fly(7000 + offset * 5, 1.0, 20, when)
+    rows = book.view_model(7100)["flies"]
+    assert len(rows) == 21
+    assert rows[-1]["slot"] == 21
+    assert rows[-1]["strike"] == 7100
+
+
 def test_fee_per_contract_defaults_to_zero_and_rejects_a_negative():
     assert parse_spec("wings: 20\n").fee_per_contract == 0.0
     assert parse_spec("fee_per_contract: 1\n").fee_per_contract == 1.0

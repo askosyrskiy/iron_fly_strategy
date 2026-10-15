@@ -26,6 +26,13 @@ def test_clock_pick_replaces_slippage_while_it_is_on():
     assert slippage_now(spec, wall=time(15, 55)) == 0.7
 
 
+def test_fee_per_contract_defaults_to_zero_and_rejects_a_negative():
+    assert parse_spec("wings: 20\n").fee_per_contract == 0.0
+    assert parse_spec("fee_per_contract: 1\n").fee_per_contract == 1.0
+    with pytest.raises(ValueError, match="fee_per_contract"):
+        parse_spec("fee_per_contract: -1\n")
+
+
 def test_missing_slippage_is_zero_and_negative_is_rejected():
     assert parse_spec("wings: 20\n").slippage == 0.0
     with pytest.raises(ValueError, match="slippage"):

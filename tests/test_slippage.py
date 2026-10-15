@@ -1,0 +1,32 @@
+"""Slippage is a non-negative config field. A later pick replaces the desk value."""
+
+from datetime import time
+
+import pytest
+
+from iron_fly_strategy.config_state import slippage_now
+from iron_fly_strategy.spec import parse_spec
+
+SPEC = """\
+slippage: 0.5
+picks:
+  - at_time: "15:44"
+    stop: 2
+    slippage: 1.1
+  - at_time: "15:55"
+    slippage: 0.7
+"""
+
+
+def test_clock_pick_replaces_slippage_while_it_is_on():
+    spec = parse_spec(SPEC)
+    assert spec.slippage == 0.5
+    assert slippage_now(spec, wall=time(15, 0)) == 0.5
+    assert slippage_now(spec, wall=time(15, 44)) == 1.1
+    assert slippage_now(spec, wall=time(15, 55)) == 0.7
+
+
+def test_missing_slippage_is_zero_and_negative_is_rejected():
+    assert parse_spec("wings: 20\n").slippage == 0.0
+    with pytest.raises(ValueError, match="slippage"):
+        parse_spec("slippage: -0.1\n")

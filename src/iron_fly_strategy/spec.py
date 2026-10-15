@@ -82,6 +82,7 @@ _TOP = {
     "close_fill_ms",
     "fill_mode_open",
     "fill_mode_close",
+    "slippage",
     *_AUTO,
 }
 CLOSE_FILL_MS_DEFAULT = 250
@@ -102,6 +103,7 @@ class DeskSpec:
     close_fill_ms: int = CLOSE_FILL_MS_DEFAULT
     fill_mode_open: str = FILL_MODE_DEFAULT
     fill_mode_close: str = FILL_MODE_DEFAULT
+    slippage: float = 0.0
 
     def summary(self) -> str:
         f1 = "click" if self.f1_at is None else self.f1_at.strftime("%H:%M")
@@ -148,6 +150,7 @@ def parse_spec(text: str) -> DeskSpec:
         close_fill_ms=_close_fill_ms(raw.get("close_fill_ms", CLOSE_FILL_MS_DEFAULT)),
         fill_mode_open=_fill_mode(raw.get("fill_mode_open"), FILL_MODE_OPEN, "fill_mode_open"),
         fill_mode_close=_fill_mode(raw.get("fill_mode_close"), FILL_MODE_CLOSE, "fill_mode_close"),
+        slippage=_slippage(raw.get("slippage", 0)),
     )
 
 
@@ -273,7 +276,7 @@ def leftover_until_clock(auto: dict[str, object] | None) -> time:
     return time.fromisoformat(str(raw))
 
 
-_PICK_FIELDS = {"at", "at_time", "at_em_pct", "at_em", "wings", "regime", "stop"}
+_PICK_FIELDS = {"at", "at_time", "at_em_pct", "at_em", "wings", "regime", "stop", "slippage"}
 _PICK_WHEN = ("at", "at_time", "at_em_pct", "at_em")
 
 
@@ -306,8 +309,22 @@ def _picks(raw: object) -> list[dict[str, object]]:
             row["regime"] = _regime(item["regime"])
         if item.get("stop") not in (None, ""):
             row["stop"] = _stop(item["stop"])
+        if item.get("slippage") not in (None, ""):
+            row["slippage"] = _slippage(item["slippage"])
         rows.append(row)
     return rows
+
+
+def _slippage(raw: object) -> float:
+    if raw in (None, ""):
+        return 0.0
+    try:
+        value = float(raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"slippage must be a number 0 or more, got {raw!r}") from exc
+    if value < 0:
+        raise ValueError(f"slippage must be a number 0 or more, got {raw!r}")
+    return value
 
 
 def _number(raw: object, field: str) -> float:

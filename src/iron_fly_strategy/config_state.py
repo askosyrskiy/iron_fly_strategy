@@ -113,6 +113,24 @@ def apply_config_state(
     )
 
 
+def slippage_now(
+    spec: DeskSpec,
+    *,
+    wall: time,
+    em_pct: float | None = None,
+    em_now: float | None = None,
+) -> float:
+    """Desk slippage, replaced by each pick that is on and sets its own."""
+    value = float(spec.slippage)
+    for pick in spec.picks:
+        if "slippage" not in pick:
+            continue
+        if not pick_is_on(pick, wall=wall, em_pct=em_pct, em_now=em_now):
+            continue
+        value = float(pick["slippage"])
+    return value
+
+
 def pick_is_on(
     pick: dict[str, object],
     *,

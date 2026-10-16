@@ -9,7 +9,7 @@ import yaml
 
 from iron_fly_strategy.rules import REGIME_LABELS
 
-WING_CHOICES = ("auto", "50", "40", "30", "25", "20")
+WING_CHOICES = ("auto", "50", "40", "30", "25", "20", "15", "10")
 DEFAULT_SPEC = """\
 f1_at: "10:40"              # open the first fly at this clock
 f1_below: 80                # AND below this EM%, open the first fly

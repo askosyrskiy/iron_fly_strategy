@@ -1,6 +1,6 @@
 [project]
 name = "iron-fly-strategy"
-version = "0.1.4"
+version = "0.1.5"
 description = "Dale's iron fly strategy rules (shared by live desk and public backtest). Inspired by https://www.youtube.com/watch?v=kNR2r8Nj3qI"
 readme = "README.md"
 requires-python = ">=3.12"

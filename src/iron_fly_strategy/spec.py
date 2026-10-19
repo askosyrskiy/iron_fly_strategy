@@ -59,6 +59,7 @@ _REGIME = {
 _AUTO = {
     "f1_below",
     "credit_regime",
+    "em_regime",
     "cookies_below",
     "cookies_min_flies",
     "follow_wings",
@@ -256,6 +257,8 @@ def _auto(raw: object) -> dict[str, object]:
         out["cookies_min_flies"] = _count(raw["cookies_min_flies"])
     if "credit_regime" in raw:
         out["credit_regime"] = _flag(raw["credit_regime"], "credit_regime")
+    if "em_regime" in raw:
+        out["em_regime"] = _flag(raw["em_regime"], "em_regime")
     if "follow_wings" in raw:
         out["follow_wings"] = _flag(raw["follow_wings"], "follow_wings")
     if "wing_steps" in raw:

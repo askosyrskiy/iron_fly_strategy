@@ -1,12 +1,14 @@
 """One pass over the desk YAML for a single print.
 
-The auto overlay runs first: cookies when EM % is under the cut, otherwise
-the first-fly credit band. Picks that have turned on can tighten the regime.
-They cannot widen it. Cookies and a clock pick stay on the tightest grid
-reached, from ±20/25 through ±15/20, ±10/15, ±7.5/10, to ±2.5/5. An EM or
-EM% pick follows the current reading and turns off when the reading is back
-above its level. Then the 0.40-put wing width. The book regime and stop are
-updated in place.
+The auto overlay runs first. With em_regime on, the current EM $ picks the
+same row as the first-fly credit table, and a later reading can widen it
+again. Otherwise cookies wins when EM % is under the cut, then the first-fly
+credit band, and that choice cannot widen. Picks that have turned on can
+tighten the regime. They cannot widen it. Cookies and a clock pick stay on
+the tightest grid reached, from ±20/25 through ±15/20, ±10/15, ±7.5/10, to
+±2.5/5, unless em_regime is driving this print. An EM or EM% pick follows
+the current reading and turns off when the reading is back above its level.
+Then the 0.40-put wing width. The book regime and stop are updated in place.
 """
 
 from __future__ import annotations
@@ -63,9 +65,11 @@ def apply_config_state(
     pick is on only while the current EM is below its level. A dip that has
     already recovered does not keep the pick on.
 
-    `regime_latch` is the tightest regime from the overlay or a clock pick.
-    An EM pick can tighten this print. It does not stick after the reading
-    recovers. A wider pick cannot leave cookies or a clock pick's grid.
+    `regime_latch` is the tightest regime from the credit overlay or a clock
+    pick. An EM pick can tighten this print. It does not stick after the
+    reading recovers. A wider pick cannot leave cookies or a clock pick's
+    grid. em_regime does not use that latch: the current EM $ sets the row,
+    and the next print may widen it.
     """
     del spot
     del em_pct_low, em_low
@@ -73,10 +77,12 @@ def apply_config_state(
     book.stop_pad = spec.stop
     width = wings
     # Use Config / desk:auto run the overlay; flat YAML has no desk: and defaults auto.
-    if _trading_auto(spec):
-        _overlay(spec, book, em_pct=em_pct, wall=wall)
-    held = _tighter(book.regime, regime_latch)
-    book.regime = held
+    em_follow = _trading_auto(spec) and _overlay(spec, book, em_pct=em_pct, wall=wall, em_now=em_now)
+    if em_follow:
+        held = ""
+    else:
+        held = _tighter(book.regime, regime_latch)
+        book.regime = held
     for pick in spec.picks:
         if not pick_is_on(
             pick,
@@ -109,7 +115,7 @@ def apply_config_state(
         stop=int(book.stop_pad),
         f1_at=_f1_at(spec, book, em_pct, wall),
         latest_wings=width,
-        regime_latch=held or book.regime,
+        regime_latch=held if em_follow else (held or book.regime),
     )
 
 
@@ -175,21 +181,39 @@ def _tighter(held: str | None, proposed: str | None) -> str:
     return held
 
 
-def _overlay(spec: DeskSpec, book: FlyBook, *, em_pct: float | None, wall: time) -> None:
+def _overlay(
+    spec: DeskSpec,
+    book: FlyBook,
+    *,
+    em_pct: float | None,
+    wall: time,
+    em_now: float | None,
+) -> bool:
+    """Set the overlay regime. True when current EM $ owns this print.
+
+    An owned print keeps cookies or the EM row only for this reading. The
+    caller does not fold it into the tighten latch, so the next print can
+    widen. Credit stays capped by the desk regime.
+    """
     auto = spec.auto
     if not _em_ready(wall):
         em_pct = None
+        em_now = None
     limit = auto.get("cookies_below")
     need = int(auto.get("cookies_min_flies") or 0)
     if limit is not None and em_pct is not None and float(em_pct) < float(limit) and len(book.active()) >= need:
         book.regime = "cookies"
-        return
+        return bool(auto.get("em_regime"))
+    if auto.get("em_regime") and em_now is not None:
+        book.regime = scale_mode(float(em_now)).name
+        return True
     if not auto.get("credit_regime"):
-        return
+        return False
     credit = book.regime_credit
     if credit is None:
-        return
+        return False
     book.regime = _clamp(scale_mode(float(credit)).name, _regime_cap(spec))
+    return False
 
 
 def _regime_cap(spec: DeskSpec) -> str | None:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, time
 from typing import Any
 
@@ -42,6 +42,7 @@ class OpenFly:
     close_debit: float | None = None
     closed_at: datetime | None = None
     origin: str = ""
+    sales: list = field(default_factory=list)
 
     @property
     def net(self) -> float | None:

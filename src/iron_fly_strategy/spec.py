@@ -24,6 +24,8 @@ wing_steps: [50, 30, 20]    # widths follow_wings may snap to
 add_until: "15:58"          # no new fly from here; drops still run until 16:01
 flatten_at: "15:49"         # flatten the wings at 15:00
 leftover_until: "15:45"     # stop sell/roll of parked wings; reopen can reuse them
+roll_above: 0.50            # roll a parked long when its value is above this
+roll_to: 0.40               # roll it to the strike nearest this price
 #fill_mode_open: mid        # mid or bid (worst STO credit)
 #fill_mode_close: mid       # mid or ask (worst BTC debit)
 picks:                      # a clock stays on; EM and EM% follow the reading
@@ -67,6 +69,8 @@ _AUTO = {
     "add_until",
     "flatten_at",
     "leftover_until",
+    "roll_above",
+    "roll_to",
     "regime_max",
 }
 # Nested `auto:` still accepted for older saved YAML.
@@ -90,6 +94,8 @@ _TOP = {
 CLOSE_FILL_MS_DEFAULT = 250
 CLOSE_FILL_MS_MAX = 5000
 LEFTOVER_UNTIL_DEFAULT = time(15, 45)
+ROLL_ABOVE_DEFAULT = 0.50
+ROLL_TO_DEFAULT = 0.40
 
 
 @dataclass(frozen=True)
@@ -269,9 +275,30 @@ def _auto(raw: object) -> dict[str, object]:
         out["flatten_at"] = _clock(raw["flatten_at"], "flatten_at").strftime("%H:%M")
     if "leftover_until" in raw and raw["leftover_until"] not in (None, ""):
         out["leftover_until"] = _clock(raw["leftover_until"], "leftover_until").strftime("%H:%M")
+    if "roll_above" in raw and raw["roll_above"] not in (None, ""):
+        out["roll_above"] = _price(raw["roll_above"], "roll_above")
+    if "roll_to" in raw and raw["roll_to"] not in (None, ""):
+        out["roll_to"] = _price(raw["roll_to"], "roll_to")
     if "regime_max" in raw and raw["regime_max"] not in (None, ""):
         out["regime_max"] = _regime(raw["regime_max"])
     return out
+
+
+def roll_above(auto: dict[str, object] | None) -> float:
+    """Roll a parked long when its value is above this. Default 0.50."""
+    return _stored_price(auto, "roll_above", ROLL_ABOVE_DEFAULT)
+
+
+def roll_to(auto: dict[str, object] | None) -> float:
+    """Roll a parked long to the strike nearest this price. Default 0.40."""
+    return _stored_price(auto, "roll_to", ROLL_TO_DEFAULT)
+
+
+def _stored_price(auto: dict[str, object] | None, key: str, default: float) -> float:
+    raw = (auto or {}).get(key)
+    if raw in (None, ""):
+        return default
+    return float(raw)
 
 
 def leftover_until_clock(auto: dict[str, object] | None) -> time:
@@ -342,6 +369,13 @@ def _slippage(raw: object) -> float:
         raise ValueError(f"slippage must be a number 0 or more, got {raw!r}") from exc
     if value < 0:
         raise ValueError(f"slippage must be a number 0 or more, got {raw!r}")
+    return value
+
+
+def _price(raw: object, field: str) -> float:
+    value = _number(raw, field)
+    if value < 0:
+        raise ValueError(f"{field} must be 0 or more")
     return value
 
 

@@ -17,8 +17,8 @@ wings: 50                   # starting width; later steps can only narrow it
 regime: "±2.5/5"            # watch ±15, add at 20; credit regime cannot go wider
 stop: 0                     # drop at the credit breakeven (K ± credit)
 credit_regime: true         # after a 50-wide fill, the grid follows that credit
-cookies_below: 50           # under this EM%, switch to the tight cookies grid
-cookies_min_flies: 1        # cookies only while at least this many flies are open
+cookies_below: 50           # under this EM%, switch to cookies and stay there
+cookies_min_flies: 1        # need this many open flies to enter cookies
 follow_wings: true          # from 9:35, width tracks the 0.40 put and never widens
 wing_steps: [50, 30, 20]    # widths follow_wings may snap to
 add_until: "15:58"          # no new fly from here; drops still run until 16:01

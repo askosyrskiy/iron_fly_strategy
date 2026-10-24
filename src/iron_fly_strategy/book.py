@@ -43,6 +43,13 @@ class OpenFly:
     closed_at: datetime | None = None
     origin: str = ""
     sales: list = field(default_factory=list)
+    call_wings: int | None = None
+
+    def spans(self) -> tuple[int, int]:
+        """Put width, then call width. A missing call width matches the put."""
+        put = int(self.wings)
+        call = put if self.call_wings is None else int(self.call_wings)
+        return put, call
 
     @property
     def net(self) -> float | None:
@@ -73,8 +80,18 @@ class FlyBook:
         wings: int,
         ts: datetime,
         origin: str = "",
+        call_wings: int | None = None,
     ) -> OpenFly:
-        fly = OpenFly(strike=strike, credit=credit, wings=wings, opened_at=ts, origin=origin)
+        if call_wings is not None and int(call_wings) == int(wings):
+            call_wings = None
+        fly = OpenFly(
+            strike=strike,
+            credit=credit,
+            wings=wings,
+            opened_at=ts,
+            origin=origin,
+            call_wings=None if call_wings is None else int(call_wings),
+        )
         self.flies.append(fly)
         # First-fly credit bands are for 50-wide; narrower adds do not re-latch.
         if wings == 50:
@@ -334,22 +351,24 @@ class FlyBook:
         if not used:
             rows = empty_blotter(1)
         else:
-            rows = [
-                FlyRow(
-                    slot=i,
-                    strike=fly.strike,
-                    status="closed" if fly.status == "closed" else "active",
-                    put_wing=fly.wings,
-                    call_wing=fly.wings,
-                    sto=fly.credit,
-                    btc_actual=fly.close_debit,
-                    btc_est=None,
-                    net=fly.net,
-                    max_loss=max_loss_per_share(fly.wings, fly.credit),
-                    origin=fly.origin,
+            rows = []
+            for i, fly in enumerate(used, start=1):
+                put_wing, call_wing = fly.spans()
+                rows.append(
+                    FlyRow(
+                        slot=i,
+                        strike=fly.strike,
+                        status="closed" if fly.status == "closed" else "active",
+                        put_wing=put_wing,
+                        call_wing=call_wing,
+                        sto=fly.credit,
+                        btc_actual=fly.close_debit,
+                        btc_est=None,
+                        net=fly.net,
+                        max_loss=max_loss_per_share(max(put_wing, call_wing), fly.credit),
+                        origin=fly.origin,
+                    )
                 )
-                for i, fly in enumerate(used, start=1)
-            ]
         collected = sum(f.credit for f in self.flies)
         live_credit = sum(f.credit for f in self.active())
         closed_n = sum(1 for f in self.flies if f.status == "closed")
@@ -385,7 +404,7 @@ class FlyBook:
 
     def _max_profit(self) -> dict[str, object]:
         return max_profit_view(
-            [(fly.strike, fly.credit, float(fly.wings), float(fly.wings)) for fly in self.active()],
+            [(fly.strike, fly.credit, float(fly.spans()[0]), float(fly.spans()[1])) for fly in self.active()],
             [fly.net for fly in self.flies if fly.status == "closed"],
         )
 

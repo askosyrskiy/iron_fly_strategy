@@ -91,14 +91,20 @@ def test_em_is_ignored_before_the_open_print():
     assert _apply(SPEC, em_now=30, wall=time(9, 30)).regime == "s3"
 
 
-def test_cookies_holds_only_while_em_pct_is_under_the_cut():
+def test_cookies_stays_on_after_em_pct_recovers():
     book = FlyBook()
     book.open_fly(6000, 22.0, 50, datetime(2026, 10, 16, 10, 40, tzinfo=_ET))
     tight = _apply(SPEC, em_now=25, em_pct=40, book=book)
     assert tight.regime == "cookies"
-    assert tight.regime_latch == ""
-    back = _apply(SPEC, em_now=25, em_pct=60, book=book, latch="cookies")
-    assert back.regime == "s4"
+    assert tight.regime_latch == "cookies"
+    back = _apply(SPEC, em_now=30, em_pct=60, book=book, latch=tight.regime_latch)
+    assert back.regime == "cookies"
+    assert back.regime_latch == "cookies"
+    empty = FlyBook()
+    stayed = _apply(SPEC, em_now=30, em_pct=80, book=empty, latch="cookies")
+    assert stayed.regime == "cookies"
+    waiting = _apply(SPEC, em_now=25, em_pct=40)
+    assert waiting.regime == "s4"
 
 
 def test_credit_still_fills_in_when_em_is_missing_and_can_lose_to_em():

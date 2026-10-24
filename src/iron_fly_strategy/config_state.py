@@ -2,11 +2,11 @@
 
 The auto overlay runs first. With em_regime on, the current EM $ picks the
 same row as the first-fly credit table, and a later reading can widen it
-again. Otherwise cookies wins when EM % is under the cut, then the first-fly
-credit band, and that choice cannot widen. Picks that have turned on can
-tighten the regime. They cannot widen it. Cookies and a clock pick stay on
-the tightest grid reached, from ±20/25 through ±15/20, ±10/15, ±7.5/10, to
-±2.5/5, unless em_regime is driving this print. An EM or EM% pick follows
+again, until cookies. Cookies turns on under the EM% cut once enough flies
+are open, and then stays for the session. Otherwise the first-fly credit
+band cannot widen. Picks that have turned on can tighten the regime. They
+cannot widen it. A clock pick stays on the tightest grid reached, from
+±20/25 through ±15/20, ±10/15, ±7.5/10, to ±2.5/5. An EM or EM% pick follows
 the current reading and turns off when the reading is back above its level.
 Then the 0.40-put wing width. The book regime and stop are updated in place.
 """
@@ -66,10 +66,11 @@ def apply_config_state(
     already recovered does not keep the pick on.
 
     `regime_latch` is the tightest regime from the credit overlay or a clock
-    pick. An EM pick can tighten this print. It does not stick after the
-    reading recovers. A wider pick cannot leave cookies or a clock pick's
-    grid. em_regime does not use that latch: the current EM $ sets the row,
-    and the next print may widen it.
+    pick, and cookies once that grid has turned on. An EM pick can tighten
+    this print. It does not stick after the reading recovers. A wider pick
+    cannot leave cookies or a clock pick's grid. em_regime does not use that
+    latch for the credit-table rows: the current EM $ sets the row, and the
+    next print may widen it, until cookies has latched.
     """
     del spot
     del em_pct_low, em_low
@@ -78,7 +79,11 @@ def apply_config_state(
     width = wings
     # Use Config / desk:auto run the overlay; flat YAML has no desk: and defaults auto.
     em_follow = _trading_auto(spec) and _overlay(spec, book, em_pct=em_pct, wall=wall, em_now=em_now)
-    if em_follow:
+    if book.regime == "cookies" or regime_latch == "cookies":
+        book.regime = "cookies"
+        held = "cookies"
+        em_follow = False
+    elif em_follow:
         held = ""
     else:
         held = _tighter(book.regime, regime_latch)
@@ -191,9 +196,10 @@ def _overlay(
 ) -> bool:
     """Set the overlay regime. True when current EM $ owns this print.
 
-    An owned print keeps cookies or the EM row only for this reading. The
-    caller does not fold it into the tighten latch, so the next print can
-    widen. Credit stays capped by the desk regime.
+    An owned print keeps the EM row only for this reading. The caller does
+    not fold it into the tighten latch, so the next print can widen. Cookies
+    is not owned: the caller keeps it after EM% recovers. Credit stays
+    capped by the desk regime.
     """
     auto = spec.auto
     if not _em_ready(wall):
@@ -203,7 +209,7 @@ def _overlay(
     need = int(auto.get("cookies_min_flies") or 0)
     if limit is not None and em_pct is not None and float(em_pct) < float(limit) and len(book.active()) >= need:
         book.regime = "cookies"
-        return bool(auto.get("em_regime"))
+        return False
     if auto.get("em_regime") and em_now is not None:
         book.regime = scale_mode(float(em_now)).name
         return True

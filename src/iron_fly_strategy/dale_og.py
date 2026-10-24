@@ -68,12 +68,15 @@ class DaleOg:
         if intent.kind is IntentKind.ADD:
             wings = int(intent.payload.get("wings", 50))
             credit = float(intent.payload.get("credit", 0))
+            raw_call = intent.payload.get("call_wings")
+            call_wings = None if raw_call in (None, "") else int(raw_call)
             self.book.open_fly(
                 strike,
                 credit,
                 wings,
                 when,
                 origin=str(intent.payload.get("origin") or ""),
+                call_wings=call_wings,
             )
         elif intent.kind is IntentKind.CLOSE:
             debit = float(intent.payload.get("debit", 0))

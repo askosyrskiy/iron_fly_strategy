@@ -26,6 +26,11 @@ flatten_at: "15:49"         # flatten the wings at 15:00
 leftover_until: "15:45"     # stop sell/roll of parked wings; reopen can reuse them
 roll_above: 0.50            # roll a parked long when its value is above this
 roll_to: 0.40               # roll it to the strike nearest this price
+open_full_order: limit      # 4-leg open: limit walk then market fallback
+open_straddle_order: market # reused-wing STO stays market
+open_fill_ms: 5000          # wait per limit attempt (ms)
+open_attempts: 5
+open_step: 0.05             # minimum credit step toward combo bid
 #fill_mode_open: mid        # mid or bid (worst STO credit)
 #fill_mode_close: mid       # mid or ask (worst BTC debit)
 picks:                      # a clock stays on; EM and EM% follow the reading
@@ -85,6 +90,11 @@ _TOP = {
     "strategy",
     "date",
     "close_fill_ms",
+    "open_full_order",
+    "open_straddle_order",
+    "open_fill_ms",
+    "open_attempts",
+    "open_step",
     "fill_mode_open",
     "fill_mode_close",
     "slippage",
@@ -93,6 +103,16 @@ _TOP = {
 }
 CLOSE_FILL_MS_DEFAULT = 250
 CLOSE_FILL_MS_MAX = 5000
+OPEN_FULL_ORDER_DEFAULT = "market"
+OPEN_STRADDLE_ORDER_DEFAULT = "market"
+OPEN_ORDER_MODES = ("market", "limit")
+OPEN_STRADDLE_ORDER_MODES = ("market",)
+OPEN_FILL_MS_DEFAULT = 5000
+OPEN_FILL_MS_MAX = 5000
+OPEN_ATTEMPTS_DEFAULT = 5
+OPEN_ATTEMPTS_MAX = 20
+OPEN_ATTEMPTS_MIN = 1
+OPEN_STEP_DEFAULT = 0.05
 LEFTOVER_UNTIL_DEFAULT = time(15, 45)
 ROLL_ABOVE_DEFAULT = 0.50
 ROLL_TO_DEFAULT = 0.40
@@ -109,6 +129,11 @@ class DeskSpec:
     auto: dict[str, object]
     picks: tuple[dict[str, object], ...]
     close_fill_ms: int = CLOSE_FILL_MS_DEFAULT
+    open_full_order: str = OPEN_FULL_ORDER_DEFAULT
+    open_straddle_order: str = OPEN_STRADDLE_ORDER_DEFAULT
+    open_fill_ms: int = OPEN_FILL_MS_DEFAULT
+    open_attempts: int = OPEN_ATTEMPTS_DEFAULT
+    open_step: float = OPEN_STEP_DEFAULT
     fill_mode_open: str = FILL_MODE_DEFAULT
     fill_mode_close: str = FILL_MODE_DEFAULT
     slippage: float = 0.0
@@ -157,6 +182,11 @@ def parse_spec(text: str) -> DeskSpec:
         auto=auto,
         picks=tuple(picks),
         close_fill_ms=_close_fill_ms(raw.get("close_fill_ms", CLOSE_FILL_MS_DEFAULT)),
+        open_full_order=_open_full_order(raw.get("open_full_order", OPEN_FULL_ORDER_DEFAULT)),
+        open_straddle_order=_open_straddle_order(raw.get("open_straddle_order", OPEN_STRADDLE_ORDER_DEFAULT)),
+        open_fill_ms=_open_fill_ms(raw.get("open_fill_ms", OPEN_FILL_MS_DEFAULT)),
+        open_attempts=_open_attempts(raw.get("open_attempts", OPEN_ATTEMPTS_DEFAULT)),
+        open_step=_open_step(raw.get("open_step", OPEN_STEP_DEFAULT)),
         fill_mode_open=_fill_mode(raw.get("fill_mode_open"), FILL_MODE_OPEN, "fill_mode_open"),
         fill_mode_close=_fill_mode(raw.get("fill_mode_close"), FILL_MODE_CLOSE, "fill_mode_close"),
         slippage=_slippage(raw.get("slippage", 0)),
@@ -183,6 +213,67 @@ def _close_fill_ms(raw: object) -> int:
         raise ValueError(f"close_fill_ms must be an integer 0–{CLOSE_FILL_MS_MAX}, got {raw!r}") from exc
     if value < 0 or value > CLOSE_FILL_MS_MAX:
         raise ValueError(f"close_fill_ms must be an integer 0–{CLOSE_FILL_MS_MAX}, got {raw!r}")
+    return value
+
+
+def _open_full_order(raw: object) -> str:
+    if raw in (None, ""):
+        return OPEN_FULL_ORDER_DEFAULT
+    text = str(raw).strip().lower()
+    if text not in OPEN_ORDER_MODES:
+        choices = " or ".join(OPEN_ORDER_MODES)
+        raise ValueError(f"open_full_order must be {choices}, got {raw!r}")
+    return text
+
+
+def _open_straddle_order(raw: object) -> str:
+    if raw in (None, ""):
+        return OPEN_STRADDLE_ORDER_DEFAULT
+    text = str(raw).strip().lower()
+    if text not in OPEN_STRADDLE_ORDER_MODES:
+        raise ValueError(
+            f"open_straddle_order must be {OPEN_STRADDLE_ORDER_MODES[0]} (limit not implemented yet), got {raw!r}"
+        )
+    return text
+
+
+def _open_fill_ms(raw: object) -> int:
+    if raw in (None, ""):
+        return OPEN_FILL_MS_DEFAULT
+    try:
+        value = int(raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"open_fill_ms must be an integer 0–{OPEN_FILL_MS_MAX}, got {raw!r}") from exc
+    if value < 0 or value > OPEN_FILL_MS_MAX:
+        raise ValueError(f"open_fill_ms must be an integer 0–{OPEN_FILL_MS_MAX}, got {raw!r}")
+    return value
+
+
+def _open_attempts(raw: object) -> int:
+    if raw in (None, ""):
+        return OPEN_ATTEMPTS_DEFAULT
+    try:
+        value = int(raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"open_attempts must be an integer {OPEN_ATTEMPTS_MIN}–{OPEN_ATTEMPTS_MAX}, got {raw!r}"
+        ) from exc
+    if value < OPEN_ATTEMPTS_MIN or value > OPEN_ATTEMPTS_MAX:
+        raise ValueError(
+            f"open_attempts must be an integer {OPEN_ATTEMPTS_MIN}–{OPEN_ATTEMPTS_MAX}, got {raw!r}"
+        )
+    return value
+
+
+def _open_step(raw: object) -> float:
+    if raw in (None, ""):
+        return OPEN_STEP_DEFAULT
+    try:
+        value = float(raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"open_step must be a positive number, got {raw!r}") from exc
+    if value <= 0:
+        raise ValueError(f"open_step must be a positive number, got {raw!r}")
     return value
 
 

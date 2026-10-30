@@ -8,6 +8,8 @@ band cannot widen. Picks that have turned on can tighten the regime. They
 cannot widen it. A clock pick stays on the tightest grid reached, from
 ±20/25 through ±15/20, ±10/15, ±7.5/10, to ±2.5/5. An EM or EM% pick follows
 the current reading and turns off when the reading is back above its level.
+With em_latch, a regime step that has fired stays tight after a bounce, and
+a stop or wing step stays on once the session low has cleared its level.
 Then the 0.40-put wing width. The book regime and stop are updated in place.
 """
 
@@ -67,13 +69,12 @@ def apply_config_state(
 
     `regime_latch` is the tightest regime from the credit overlay or a clock
     pick, and cookies once that grid has turned on. An EM pick can tighten
-    this print. It does not stick after the reading recovers. A wider pick
-    cannot leave cookies or a clock pick's grid. em_regime does not use that
-    latch for the credit-table rows: the current EM $ sets the row, and the
-    next print may widen it, until cookies has latched.
+    this print. It does not stick after the reading recovers, unless em_latch
+    is on. A wider pick cannot leave cookies or a clock pick's grid.
+    em_regime does not use that latch for the credit-table rows: the current
+    EM $ sets the row, and the next print may widen it, until cookies has latched.
     """
     del spot
-    del em_pct_low, em_low
     book.regime = spec.regime
     book.stop_pad = spec.stop
     width = wings
@@ -88,17 +89,21 @@ def apply_config_state(
     else:
         held = _tighter(book.regime, regime_latch)
         book.regime = held
+    latch = bool(spec.auto.get("em_latch"))
     for pick in spec.picks:
         if not pick_is_on(
             pick,
             wall=wall,
             em_pct=em_pct,
             em_now=em_now,
+            em_pct_low=em_pct_low,
+            em_low=em_low,
+            latch=latch,
         ):
             continue
         if "regime" in pick:
             book.regime = _tighter(book.regime, str(pick["regime"]))
-            if "at" in pick:
+            if "at" in pick or latch:
                 held = _tighter(held, book.regime)
         if "stop" in pick:
             book.stop_pad = int(pick["stop"])
@@ -150,21 +155,30 @@ def pick_is_on(
     em_now: float | None = None,
     em_pct_low: float | None = None,
     em_low: float | None = None,
+    latch: bool = False,
 ) -> bool:
     """True while a pick applies. A clock pick stays on after its time.
 
     An EM% pick applies only while EM% is below its level. An EM pick applies
     only while EM is below its level. Both wait until the open EM has latched.
+    With latch, a stop or wing step stays on once the session low has cleared
+    its level. A regime step latches in the caller instead, so the open print
+    cannot pin a wide band.
     """
-    del em_pct_low, em_low
     if "at" in pick:
         return wall >= time.fromisoformat(str(pick["at"]))
     if not _em_ready(wall):
         return False
     if "at_em_pct" in pick:
-        return em_pct is not None and float(em_pct) < float(pick["at_em_pct"])
+        level = float(pick["at_em_pct"])
+        if latch and "regime" not in pick and em_pct_low is not None and float(em_pct_low) < level:
+            return True
+        return em_pct is not None and float(em_pct) < level
     if "at_em" in pick:
-        return em_now is not None and float(em_now) < float(pick["at_em"])
+        level = float(pick["at_em"])
+        if latch and "regime" not in pick and em_low is not None and float(em_low) < level:
+            return True
+        return em_now is not None and float(em_now) < level
     return False
 
 

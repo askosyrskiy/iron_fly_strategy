@@ -33,6 +33,7 @@ def _apply(
     wall: time = _WALL,
     book: FlyBook | None = None,
     latch: str | None = None,
+    em_low: float | None = None,
 ):
     spec = parse_spec(spec_text)
     return apply_config_state(
@@ -45,6 +46,7 @@ def _apply(
         wings=spec.wings,
         em_now=em_now,
         regime_latch=latch,
+        em_low=em_low,
     )
 
 
@@ -131,6 +133,42 @@ picks:
     assert pinned.regime == "s1"
     assert pinned.regime_latch == ""
     assert _apply(text, em_now=25, em_pct=70, latch=pinned.regime_latch or None).regime == "s4"
+
+
+def test_em_latch_keeps_a_tighter_regime_after_em_bounces():
+    text = """\
+regime: "±20/25"
+em_regime: false
+em_latch: true
+picks:
+  - at_em: 26.5
+    regime: "±15/20"
+"""
+    book = FlyBook()
+    low = _apply(text, em_now=26.3, book=book)
+    assert low.regime == "s3"
+    bounced = _apply(text, em_now=28, book=book, latch=low.regime_latch)
+    assert bounced.regime == "s3"
+    assert bounced.regime_latch == "s3"
+
+
+def test_em_latch_keeps_a_stop_once_the_session_low_clears_it():
+    text = """\
+stop: 0
+em_latch: true
+picks:
+  - at_em: 9.5
+    stop: 1
+"""
+    assert _apply(text, em_now=9.4, em_low=9.4).stop == 1
+    assert _apply(text, em_now=10.5, em_low=9.4).stop == 1
+    plain = """\
+stop: 0
+picks:
+  - at_em: 9.5
+    stop: 1
+"""
+    assert _apply(plain, em_now=10.5, em_low=9.4).stop == 0
 
 
 def test_em_regime_off_ignores_the_reading():

@@ -34,6 +34,7 @@ def _apply(
     book: FlyBook | None = None,
     latch: str | None = None,
     em_low: float | None = None,
+    pick_fired: frozenset[int] | None = None,
 ):
     spec = parse_spec(spec_text)
     return apply_config_state(
@@ -47,6 +48,7 @@ def _apply(
         em_now=em_now,
         regime_latch=latch,
         em_low=em_low,
+        pick_fired=pick_fired,
     )
 
 
@@ -220,3 +222,58 @@ picks:
     bounced = _apply(text, em_now=30, em_pct=75, book=book, latch=low.regime_latch)
     assert bounced.regime == "s3"
     assert bounced.regime_latch == "s3"
+
+
+def test_regime_down_does_not_ratchet_while_em_pct_stays_low():
+    text = """\
+regime: "±20/25"
+em_regime: false
+em_latch: true
+credit_regime: true
+picks:
+  - at_em_pct: 70
+    regime_down: 1
+"""
+    book = FlyBook()
+    book.open_fly(6000, 25.6, 50, datetime(2026, 11, 3, 10, 57, 32, tzinfo=_ET))
+    first = _apply(text, em_now=30, em_pct=65, book=book, latch="s4")
+    assert first.regime == "s3"
+    second = _apply(text, em_now=30, em_pct=64, book=book, latch=first.regime_latch, pick_fired=first.pick_fired)
+    assert second.regime == "s3"
+    assert second.regime_latch == "s3"
+    assert 0 in second.pick_fired
+
+
+def test_regime_down_does_not_refire_after_em_pct_recovers():
+    text = """\
+regime: "±20/25"
+em_regime: false
+em_latch: true
+credit_regime: true
+picks:
+  - at_em_pct: 70
+    regime_down: 1
+"""
+    book = FlyBook()
+    book.open_fly(6000, 25.6, 50, datetime(2026, 11, 3, 10, 57, tzinfo=_ET))
+    first = _apply(text, em_now=30, em_pct=65, book=book, latch="s4")
+    assert first.regime == "s3"
+    wide = _apply(
+        text,
+        em_now=30,
+        em_pct=80,
+        book=book,
+        latch=first.regime_latch,
+        pick_fired=first.pick_fired,
+    )
+    assert wide.regime == "s3"
+    again = _apply(
+        text,
+        em_now=30,
+        em_pct=65,
+        book=book,
+        latch=wide.regime_latch,
+        pick_fired=wide.pick_fired,
+    )
+    assert again.regime == "s3"
+    assert again.pick_fired == first.pick_fired

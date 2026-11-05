@@ -41,6 +41,7 @@ class ConfigState:
     f1_at: time | None
     latest_wings: str = ""
     regime_latch: str = ""
+    pick_fired: frozenset[int] = frozenset()
 
 
 def apply_config_state(
@@ -58,6 +59,7 @@ def apply_config_state(
     em_pct_low: float | None = None,
     em_low: float | None = None,
     regime_latch: str | None = None,
+    pick_fired: frozenset[int] | None = None,
 ) -> ConfigState:
     """Regime, wings, stop, and F1 for this SPX print. `spot` is that print.
 
@@ -92,7 +94,9 @@ def apply_config_state(
         held = _tighter(book.regime, regime_latch)
         book.regime = held
     latch = bool(spec.auto.get("em_latch"))
-    for pick in spec.picks:
+    down_floor = _regime_down_floor(spec, book, wall=wall, em_pct=em_pct, em_now=em_now)
+    fired: set[int] = set(pick_fired or ())
+    for index, pick in enumerate(spec.picks):
         if not pick_is_on(
             pick,
             wall=wall,
@@ -103,18 +107,23 @@ def apply_config_state(
             latch=latch,
         ):
             continue
-        if "regime" in pick:
+        if _em_regime_pick(pick) and index in fired:
+            pass
+        elif "regime" in pick:
             book.regime = _tighter(book.regime, str(pick["regime"]))
             if "at" in pick or latch:
                 held = _tighter(held, book.regime)
+            if _em_regime_pick(pick):
+                fired.add(index)
         elif "regime_down" in pick:
             steps = int(pick["regime_down"])
-            tightened = book.regime
+            tightened = down_floor
             for _ in range(steps):
                 tightened = _regime_one_step_tighter(tightened)
             book.regime = _tighter(book.regime, tightened)
             if "at" in pick or latch:
                 held = _tighter(held, book.regime)
+            fired.add(index)
         if "stop" in pick:
             book.stop_pad = int(pick["stop"])
         if "wings" in pick:
@@ -136,6 +145,7 @@ def apply_config_state(
         f1_at=_f1_at(spec, book, em_pct, wall),
         latest_wings=width,
         regime_latch=held if em_follow else (held or book.regime),
+        pick_fired=frozenset(fired),
     )
 
 
@@ -192,6 +202,13 @@ def pick_is_on(
     return False
 
 
+def _em_regime_pick(pick: dict[str, object]) -> bool:
+    """EM or EM% pick that sets regime or regime_down — fires at most once per session."""
+    if "regime" not in pick and "regime_down" not in pick:
+        return False
+    return "at_em_pct" in pick or "at_em" in pick
+
+
 def _em_ready(wall: time) -> bool:
     """True once the open EM is published, on the first print after 9:30:30."""
     return wall > _EM_FROM
@@ -216,6 +233,44 @@ def _regime_one_step_tighter(name: str) -> str:
         return name
     index = _REGIME_LADDER.index(name)
     return _REGIME_LADDER[max(index - 1, 0)]
+
+
+def _credit_regime_floor(
+    spec: DeskSpec,
+    book: FlyBook,
+    *,
+    wall: time,
+    em_pct: float | None,
+    em_now: float | None,
+) -> str | None:
+    """Credit-table band for this print, ignoring pick latch."""
+    auto = spec.auto
+    if not auto.get("credit_regime"):
+        return None
+    if not _em_ready(wall):
+        return None
+    credit = book.regime_credit
+    if credit is None:
+        return None
+    return _clamp(scale_mode(float(credit)).name, _regime_cap(spec))
+
+
+def _regime_down_floor(
+    spec: DeskSpec,
+    book: FlyBook,
+    *,
+    wall: time,
+    em_pct: float | None,
+    em_now: float | None,
+) -> str:
+    """Wide band regime_down steps from: fill credit row, else desk cap."""
+    credit = _credit_regime_floor(spec, book, wall=wall, em_pct=em_pct, em_now=em_now)
+    if credit is not None:
+        return credit
+    cap = _regime_cap(spec)
+    if cap is not None:
+        return cap
+    return book.regime
 
 
 def _overlay(

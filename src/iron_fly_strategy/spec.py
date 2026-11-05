@@ -313,6 +313,16 @@ def _regime(raw: object) -> str:
     return _REGIME[text]
 
 
+def _regime_down(raw: object) -> int:
+    try:
+        value = int(raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"regime_down must be 1, got {raw!r}") from exc
+    if value != 1:
+        raise ValueError(f"regime_down must be 1, got {raw!r}")
+    return value
+
+
 def _stop(raw: object) -> int:
     from iron_fly_strategy.rules import STOP_PAD_MAX, valid_stop_pad
 
@@ -403,7 +413,7 @@ def leftover_until_clock(auto: dict[str, object] | None) -> time:
     return time.fromisoformat(str(raw))
 
 
-_PICK_FIELDS = {"at", "at_time", "at_em_pct", "at_em", "wings", "regime", "stop", "slippage"}
+_PICK_FIELDS = {"at", "at_time", "at_em_pct", "at_em", "wings", "regime", "regime_down", "stop", "slippage"}
 _PICK_WHEN = ("at", "at_time", "at_em_pct", "at_em")
 
 
@@ -432,8 +442,14 @@ def _picks(raw: object) -> list[dict[str, object]]:
             row["at_em"] = _number(item[trigger], "at_em")
         if item.get("wings") not in (None, ""):
             row["wings"] = _wings(item["wings"])
-        if item.get("regime") not in (None, ""):
+        has_regime = item.get("regime") not in (None, "")
+        has_regime_down = item.get("regime_down") not in (None, "")
+        if has_regime and has_regime_down:
+            raise ValueError("each pick may set regime or regime_down, not both")
+        if has_regime:
             row["regime"] = _regime(item["regime"])
+        if has_regime_down:
+            row["regime_down"] = _regime_down(item["regime_down"])
         if item.get("stop") not in (None, ""):
             row["stop"] = _stop(item["stop"])
         if item.get("slippage") not in (None, ""):

@@ -176,3 +176,47 @@ def test_em_regime_off_ignores_the_reading():
     state = _apply(text, em_now=30)
     assert state.regime == "s3"
     assert state.regime_latch == "s3"
+
+
+def test_regime_down_steps_one_band_on_em_pct():
+    text = """\
+regime: "±20/25"
+em_regime: false
+em_latch: true
+credit_regime: false
+picks:
+  - at_em_pct: 70
+    regime_down: 1
+"""
+    low = _apply(text, em_now=30, em_pct=65, latch="s4")
+    assert low.regime == "s3"
+    assert low.regime_latch == "s3"
+
+
+def test_regime_down_stays_on_s1():
+    text = """\
+regime: "±7.5/10"
+em_latch: true
+picks:
+  - at_em_pct: 70
+    regime_down: 1
+"""
+    state = _apply(text, em_now=14, em_pct=65, latch="s1")
+    assert state.regime == "s1"
+    assert state.regime_latch == "s1"
+
+
+def test_regime_down_latches_after_em_pct_bounces():
+    text = """\
+regime: "±20/25"
+em_latch: true
+picks:
+  - at_em_pct: 70
+    regime_down: 1
+"""
+    book = FlyBook()
+    low = _apply(text, em_now=30, em_pct=65, book=book, latch="s4")
+    assert low.regime == "s3"
+    bounced = _apply(text, em_now=30, em_pct=75, book=book, latch=low.regime_latch)
+    assert bounced.regime == "s3"
+    assert bounced.regime_latch == "s3"

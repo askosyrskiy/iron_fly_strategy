@@ -22,6 +22,8 @@ from iron_fly_strategy.book import FlyBook
 from iron_fly_strategy.rules import scale_mode, wings_for_clock
 from iron_fly_strategy.spec import DeskSpec
 
+# Lower is tighter on the s1–s4 credit ladder.
+_REGIME_LADDER = ("s1", "s2", "s3", "s4")
 _WIDTH = {"s1": 1, "s2": 2, "s3": 3, "s4": 4}
 # Lower is tighter. Cookies and the ladder are both the ±2.5/5 grid.
 _TIGHT = {"cookies": 0, "ladder": 0, "s1": 1, "s2": 2, "s3": 3, "s4": 4}
@@ -105,6 +107,14 @@ def apply_config_state(
             book.regime = _tighter(book.regime, str(pick["regime"]))
             if "at" in pick or latch:
                 held = _tighter(held, book.regime)
+        elif "regime_down" in pick:
+            steps = int(pick["regime_down"])
+            tightened = book.regime
+            for _ in range(steps):
+                tightened = _regime_one_step_tighter(tightened)
+            book.regime = _tighter(book.regime, tightened)
+            if "at" in pick or latch:
+                held = _tighter(held, book.regime)
         if "stop" in pick:
             book.stop_pad = int(pick["stop"])
         if "wings" in pick:
@@ -171,12 +181,12 @@ def pick_is_on(
         return False
     if "at_em_pct" in pick:
         level = float(pick["at_em_pct"])
-        if latch and "regime" not in pick and em_pct_low is not None and float(em_pct_low) < level:
+        if latch and "regime" not in pick and "regime_down" not in pick and em_pct_low is not None and float(em_pct_low) < level:
             return True
         return em_pct is not None and float(em_pct) < level
     if "at_em" in pick:
         level = float(pick["at_em"])
-        if latch and "regime" not in pick and em_low is not None and float(em_low) < level:
+        if latch and "regime" not in pick and "regime_down" not in pick and em_low is not None and float(em_low) < level:
             return True
         return em_now is not None and float(em_now) < level
     return False
@@ -198,6 +208,14 @@ def _tighter(held: str | None, proposed: str | None) -> str:
     if _TIGHT[proposed] < _TIGHT[held]:
         return proposed
     return held
+
+
+def _regime_one_step_tighter(name: str) -> str:
+    """One band tighter on s1–s4; cookies, ladder, and s1 stay put."""
+    if name not in _REGIME_LADDER:
+        return name
+    index = _REGIME_LADDER.index(name)
+    return _REGIME_LADDER[max(index - 1, 0)]
 
 
 def _overlay(

@@ -31,8 +31,8 @@ F1_AT: time | None = None
 MAX_OPEN = 5
 # No ADD/CLOSE at or after this ET clock (16:00 cash print still trades).
 TRADE_STOP = time(16, 1)
-# No new fly at or after this ET clock. Drops still run until TRADE_STOP.
-ADD_UNTIL = time(15, 57)
+# Optional cap on new flies (drops still run until TRADE_STOP). None = adds all session.
+ADD_UNTIL: time | None = None
 
 
 class DaleOg:

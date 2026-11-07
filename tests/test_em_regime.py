@@ -68,7 +68,12 @@ def test_em_dollars_use_the_credit_table_and_ignore_the_desk_cap():
     assert _apply(SPEC, em_now=24).regime == "s3"
     assert _apply(SPEC, em_now=24.89).regime == "s3"
     assert _apply(SPEC, em_now=24.90).regime == "s4"
-    assert _apply(SPEC, em_now=30, latch="s1").regime == "s4"
+    assert _apply(SPEC, em_now=29.99).regime == "s4"
+    assert _apply(SPEC, em_now=30).regime == "s5"
+    assert _apply(SPEC, em_now=34.99).regime == "s5"
+    assert _apply(SPEC, em_now=35).regime == "s5"
+    assert _apply(SPEC, em_now=30, latch="s1").regime == "s5"
+    assert parse_spec('regime: "±25/30"\n').regime == "s5"
 
 
 def test_a_later_print_can_widen_when_em_rises():
@@ -88,7 +93,7 @@ def test_missing_em_keeps_the_desk_regime_until_a_reading_arrives():
     missing = _apply(SPEC, em_now=None, book=book)
     assert missing.regime == "s3"
     wide = _apply(SPEC, em_now=30, book=book, latch=missing.regime_latch)
-    assert wide.regime == "s4"
+    assert wide.regime == "s5"
 
 
 def test_em_is_ignored_before_the_open_print():
@@ -116,7 +121,7 @@ def test_credit_still_fills_in_when_em_is_missing_and_can_lose_to_em():
     book = FlyBook()
     book.open_fly(6000, 12.0, 50, datetime(2026, 10, 16, 10, 40, tzinfo=_ET))
     assert _apply(text, em_now=None, book=book).regime == "s1"
-    assert _apply(text, em_now=30, book=book, latch="s1").regime == "s4"
+    assert _apply(text, em_now=30, book=book, latch="s1").regime == "s5"
 
 
 def test_clock_stop_still_applies_and_a_regime_pick_only_tightens():
@@ -178,6 +183,19 @@ def test_em_regime_off_ignores_the_reading():
     state = _apply(text, em_now=30)
     assert state.regime == "s3"
     assert state.regime_latch == "s3"
+
+
+def test_regime_down_from_25_30_lands_on_20_25():
+    text = """\
+regime: "±25/30"
+em_latch: true
+picks:
+  - at_em_pct: 70
+    regime_down: 1
+"""
+    state = _apply(text, em_now=32, em_pct=65, latch="s5")
+    assert state.regime == "s4"
+    assert state.regime_latch == "s4"
 
 
 def test_regime_down_steps_one_band_on_em_pct():

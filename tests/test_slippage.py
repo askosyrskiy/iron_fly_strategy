@@ -34,12 +34,12 @@ def test_view_model_keeps_flies_past_the_old_blotter_cap():
 
     book = FlyBook()
     when = datetime(2026, 10, 5, 10, 40, tzinfo=ZoneInfo("America/New_York"))
-    for offset in range(21):
+    for offset in range(30):
         book.open_fly(7000 + offset * 5, 1.0, 20, when)
-    rows = book.view_model(7100)["flies"]
-    assert len(rows) == 21
-    assert rows[-1]["slot"] == 21
-    assert rows[-1]["strike"] == 7100
+    rows = book.view_model(7145)["flies"]
+    assert len(rows) == 30
+    assert rows[-1]["slot"] == 30
+    assert rows[-1]["strike"] == 7145
 
 
 def test_fee_per_contract_defaults_to_zero_and_rejects_a_negative():

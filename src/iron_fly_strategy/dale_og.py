@@ -28,7 +28,6 @@ _ET = ZoneInfo("America/New_York")
 # Auto first fly at this ET clock (inclusive). None = human Open click.
 # Live/sim: Captain's Log F1 time + Auto open override this. Backtest: `--f1-at`.
 F1_AT: time | None = None
-MAX_OPEN = 5
 # No ADD/CLOSE at or after this ET clock (16:00 cash print still trades).
 TRADE_STOP = time(16, 1)
 # Optional cap on new flies (drops still run until TRADE_STOP). None = adds all session.
@@ -41,7 +40,6 @@ class DaleOg:
     underlyings = ("SPX",)
     mode = SessionMode.CONFIRM
     f1_at = F1_AT
-    max_open = MAX_OPEN
     add_until = ADD_UNTIL
 
     def __init__(self, book: FlyBook | None = None) -> None:
@@ -160,9 +158,6 @@ class DaleOg:
         if cookie is not None:
             return [cookie]
 
-        if len(shorts) >= self.max_open:
-            return []
-
         add = self._crossed_add(spot, ts, width)
         return [add] if add is not None else []
 
@@ -192,8 +187,6 @@ class DaleOg:
         strike = round_to_5(spot)
         if strike in self.book.active_strikes():
             self.book.mark_cookie(strike)
-            return None
-        if len(self.book.active()) >= self.max_open:
             return None
         return self._cookie_intent(spot, width)
 
@@ -268,8 +261,6 @@ class DaleOg:
             if wall < self.f1_at:
                 return f"waiting for F1 at {self.f1_at.strftime('%H:%M')} ET"
             return "F1 due"
-        if len(shorts) >= self.max_open:
-            return f"at max {self.max_open}"
         nearest: tuple[float, str, float | None, float, str] | None = None
         for row in self.book.log_ladder(spot, clock):
             if not row.get("enabled"):

@@ -20,6 +20,7 @@ S1 = ScaleMode("s1", 7.5, 10.0)
 S2 = ScaleMode("s2", 10.0, 15.0)
 S3 = ScaleMode("s3", 15.0, 20.0)
 S4 = ScaleMode("s4", 20.0, 25.0)
+S5 = ScaleMode("s5", 25.0, 30.0)
 LADDER = ScaleMode("ladder", 2.5, 5.0)
 COOKIES = ScaleMode("cookies", 2.5, 5.0)
 LADDER_AFTER = time(13, 0)  # 1:00 ET
@@ -28,6 +29,7 @@ REGIME_MODES = {
     "s2": S2,
     "s3": S3,
     "s4": S4,
+    "s5": S5,
     "ladder": LADDER,
     "cookies": COOKIES,
 }
@@ -36,6 +38,7 @@ REGIME_LABELS = {
     "s2": "±10 / 15",
     "s3": "±15 / 20",
     "s4": "±20 / 25",
+    "s5": "±25 / 30",
     "ladder": "±2.5 / 5",
     "cookies": "Cookies ±2.5 / 5",
 }
@@ -50,7 +53,9 @@ def scale_mode(first_credit: float) -> ScaleMode:
         return S2
     if first_credit < 24.90:
         return S3
-    return S4
+    if first_credit < 30:
+        return S4
+    return S5
 
 
 def parse_regime(raw: str | None) -> str:
@@ -104,7 +109,7 @@ def next_adds(
 ) -> tuple[AddTarget | None, AddTarget | None]:
     """Next Add above last and next Add below last.
 
-    ``regime`` picks the grid (s1–s4 outer edges, Cookies/Ladder ±2.5/5 neighbors).
+    ``regime`` picks the grid (s1–s5 outer edges, Cookies/Ladder ±2.5/5 neighbors).
     Open shorts are skipped. Cookies keep at most two Adds: the nearest watch at
     or above last, and the nearest watch below last. One fly still returns both
     edge Adds. Empty book is ATM ± the grid.

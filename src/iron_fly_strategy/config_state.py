@@ -6,7 +6,7 @@ again, until cookies. Cookies turns on under the EM% cut once enough flies
 are open, and then stays for the session. Otherwise the first-fly credit
 band cannot widen. Picks that have turned on can tighten the regime. They
 cannot widen it. A clock pick stays on the tightest grid reached, from
-±20/25 through ±15/20, ±10/15, ±7.5/10, to ±2.5/5. An EM or EM% pick follows
+±25/30 through ±20/25, ±15/20, ±10/15, ±7.5/10, to ±2.5/5. An EM or EM% pick follows
 the current reading and turns off when the reading is back above its level.
 With em_latch, a regime step that has fired stays tight after a bounce, and
 a stop or wing step stays on once the session low has cleared its level.
@@ -22,11 +22,11 @@ from iron_fly_strategy.book import FlyBook
 from iron_fly_strategy.rules import scale_mode, wings_for_clock
 from iron_fly_strategy.spec import DeskSpec
 
-# Lower is tighter on the s1–s4 credit ladder.
-_REGIME_LADDER = ("s1", "s2", "s3", "s4")
-_WIDTH = {"s1": 1, "s2": 2, "s3": 3, "s4": 4}
+# Lower is tighter on the s1–s5 credit ladder.
+_REGIME_LADDER = ("s1", "s2", "s3", "s4", "s5")
+_WIDTH = {"s1": 1, "s2": 2, "s3": 3, "s4": 4, "s5": 5}
 # Lower is tighter. Cookies and the ladder are both the ±2.5/5 grid.
-_TIGHT = {"cookies": 0, "ladder": 0, "s1": 1, "s2": 2, "s3": 3, "s4": 4}
+_TIGHT = {"cookies": 0, "ladder": 0, "s1": 1, "s2": 2, "s3": 3, "s4": 4, "s5": 5}
 _WINGS_FROM = time(9, 35)
 _PUT_TARGET = 0.40
 # Open EM is the 9:30:00–9:30:30 average and is published on the next print.
@@ -228,7 +228,7 @@ def _tighter(held: str | None, proposed: str | None) -> str:
 
 
 def _regime_one_step_tighter(name: str) -> str:
-    """One band tighter on s1–s4; cookies, ladder, and s1 stay put."""
+    """One band tighter on s1–s5; cookies, ladder, and s1 stay put."""
     if name not in _REGIME_LADDER:
         return name
     index = _REGIME_LADDER.index(name)

@@ -41,7 +41,7 @@ class CaptainsLog:
         return asdict(self)
 
 
-BLOTTER_MAX = 20
+BLOTTER_MAX = 30
 
 
 def empty_blotter(slots: int = 1) -> list[FlyRow]:

@@ -26,6 +26,9 @@ flatten_at: "15:49"         # flatten the wings at 15:00
 leftover_until: "15:45"     # stop sell/roll of parked wings; reopen can reuse them
 roll_above: 0.50            # roll a parked long when its value is above this
 roll_to: 0.40               # roll it to the strike nearest this price
+close_mode: fly             # fly | straddle_only (BTC shorts, park wings)
+pool_reuse: exact           # exact | asymmetric (default asymmetric when straddle_only)
+leftover_stc: true          # auto-STC cheap parked wings when false roll-only
 open_full_order: limit      # 4-leg open: limit walk then market fallback
 open_straddle_order: market # reused-wing STO stays market
 open_fill_ms: 5000          # wait per limit attempt (ms)
@@ -80,6 +83,9 @@ _AUTO = {
     "leftover_until",
     "roll_above",
     "roll_to",
+    "close_mode",
+    "pool_reuse",
+    "leftover_stc",
     "regime_max",
 }
 # Nested `auto:` still accepted for older saved YAML.
@@ -120,6 +126,10 @@ OPEN_STEP_DEFAULT = 0.05
 LEFTOVER_UNTIL_DEFAULT = time(15, 45)
 ROLL_ABOVE_DEFAULT = 0.50
 ROLL_TO_DEFAULT = 0.40
+CLOSE_MODE_DEFAULT = "fly"
+CLOSE_MODES = ("fly", "straddle_only")
+POOL_REUSE_DEFAULT = "exact"
+POOL_REUSE_MODES = ("exact", "asymmetric")
 
 
 @dataclass(frozen=True)
@@ -386,9 +396,55 @@ def _auto(raw: object) -> dict[str, object]:
         out["roll_above"] = _price(raw["roll_above"], "roll_above")
     if "roll_to" in raw and raw["roll_to"] not in (None, ""):
         out["roll_to"] = _price(raw["roll_to"], "roll_to")
+    if "close_mode" in raw and raw["close_mode"] not in (None, ""):
+        out["close_mode"] = _close_mode(raw["close_mode"])
+    if "pool_reuse" in raw and raw["pool_reuse"] not in (None, ""):
+        out["pool_reuse"] = _pool_reuse(raw["pool_reuse"])
+    if "leftover_stc" in raw:
+        out["leftover_stc"] = _flag(raw["leftover_stc"], "leftover_stc")
     if "regime_max" in raw and raw["regime_max"] not in (None, ""):
         out["regime_max"] = _regime(raw["regime_max"])
     return out
+
+
+def close_mode(auto: dict[str, object] | None) -> str:
+    """Close as a 4-leg fly or BTC shorts and park wings."""
+    raw = (auto or {}).get("close_mode")
+    if raw in (None, ""):
+        return CLOSE_MODE_DEFAULT
+    return _close_mode(raw)
+
+
+def pool_reuse(auto: dict[str, object] | None) -> str:
+    """Match parked longs on open: exact K±wings or nearest asymmetric pair."""
+    raw = (auto or {}).get("pool_reuse")
+    if raw not in (None, ""):
+        return _pool_reuse(raw)
+    if close_mode(auto) == "straddle_only":
+        return "asymmetric"
+    return POOL_REUSE_DEFAULT
+
+
+def leftover_stc(auto: dict[str, object] | None) -> bool:
+    """Auto-STC parked wings with a bid. False = roll rich wings only."""
+    raw = (auto or {}).get("leftover_stc")
+    if raw in (None, ""):
+        return close_mode(auto) != "straddle_only"
+    return bool(raw)
+
+
+def _close_mode(raw: object) -> str:
+    name = str(raw).strip().lower()
+    if name not in CLOSE_MODES:
+        raise ValueError(f"close_mode must be fly or straddle_only, got {raw!r}")
+    return name
+
+
+def _pool_reuse(raw: object) -> str:
+    name = str(raw).strip().lower()
+    if name not in POOL_REUSE_MODES:
+        raise ValueError(f"pool_reuse must be exact or asymmetric, got {raw!r}")
+    return name
 
 
 def roll_above(auto: dict[str, object] | None) -> float:

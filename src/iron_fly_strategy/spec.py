@@ -29,6 +29,7 @@ roll_to: 0.40               # roll it to the strike nearest this price
 close_mode: fly             # fly | straddle_only (BTC shorts, park wings)
 pool_reuse: exact           # exact | asymmetric (default asymmetric when straddle_only)
 leftover_stc: true          # auto-STC cheap parked wings when false roll-only
+leftover_roll: false         # auto-roll above roll_above; manual Roll in UI stays on
 open_full_order: limit      # 4-leg open: limit walk then market fallback
 open_straddle_order: market # reused-wing STO stays market
 open_fill_ms: 5000          # wait per limit attempt (ms)
@@ -86,6 +87,7 @@ _AUTO = {
     "close_mode",
     "pool_reuse",
     "leftover_stc",
+    "leftover_roll",
     "regime_max",
 }
 # Nested `auto:` still accepted for older saved YAML.
@@ -402,6 +404,8 @@ def _auto(raw: object) -> dict[str, object]:
         out["pool_reuse"] = _pool_reuse(raw["pool_reuse"])
     if "leftover_stc" in raw:
         out["leftover_stc"] = _flag(raw["leftover_stc"], "leftover_stc")
+    if "leftover_roll" in raw:
+        out["leftover_roll"] = _flag(raw["leftover_roll"], "leftover_roll")
     if "regime_max" in raw and raw["regime_max"] not in (None, ""):
         out["regime_max"] = _regime(raw["regime_max"])
     return out
@@ -430,6 +434,14 @@ def leftover_stc(auto: dict[str, object] | None) -> bool:
     raw = (auto or {}).get("leftover_stc")
     if raw in (None, ""):
         return close_mode(auto) != "straddle_only"
+    return bool(raw)
+
+
+def leftover_roll(auto: dict[str, object] | None) -> bool:
+    """Auto-roll parked wings above roll_above. Off by default; manual Roll stays available."""
+    raw = (auto or {}).get("leftover_roll")
+    if raw in (None, ""):
+        return False
     return bool(raw)
 
 

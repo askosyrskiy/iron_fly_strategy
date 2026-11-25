@@ -71,9 +71,10 @@ def test_em_dollars_use_the_credit_table_and_ignore_the_desk_cap():
     assert _apply(SPEC, em_now=29.99).regime == "s4"
     assert _apply(SPEC, em_now=30).regime == "s5"
     assert _apply(SPEC, em_now=34.99).regime == "s5"
-    assert _apply(SPEC, em_now=35).regime == "s5"
+    assert _apply(SPEC, em_now=35).regime == "s6"
     assert _apply(SPEC, em_now=30, latch="s1").regime == "s5"
     assert parse_spec('regime: "±25/30"\n').regime == "s5"
+    assert parse_spec('regime: "±30/35"\n').regime == "s6"
 
 
 def test_a_later_print_can_widen_when_em_rises():

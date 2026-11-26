@@ -16,6 +16,8 @@ f1_below: 80                # AND below this EM%, open the first fly
 wings: 50                   # starting width; later steps can only narrow it
 regime: "±2.5/5"            # watch ±15, add at 20; credit regime cannot go wider
 stop: 0                     # drop at the credit breakeven (K ± credit)
+#day_loss_stop: -5000       # flatten and stop when session P&L hits this ($)
+#day_profit_goal: 3000      # flatten and stop when session P&L reaches this ($)
 credit_regime: true         # after a 50-wide fill, the grid follows that credit
 cookies_below: 50           # under this EM%, switch to cookies and stay there
 cookies_min_flies: 1        # need this many open flies to enter cookies
@@ -114,6 +116,8 @@ _TOP = {
     "fill_mode_close",
     "slippage",
     "fee_per_contract",
+    "day_loss_stop",
+    "day_profit_goal",
     *_AUTO,
 }
 CLOSE_FILL_MS_DEFAULT = 250
@@ -157,6 +161,8 @@ class DeskSpec:
     fill_mode_close: str = FILL_MODE_DEFAULT
     slippage: float = 0.0
     fee_per_contract: float = 0.0
+    day_loss_stop: int | None = None
+    day_profit_goal: int | None = None
 
     def summary(self) -> str:
         f1 = "click" if self.f1_at is None else self.f1_at.strftime("%H:%M")
@@ -210,6 +216,8 @@ def parse_spec(text: str) -> DeskSpec:
         fill_mode_close=_fill_mode(raw.get("fill_mode_close"), FILL_MODE_CLOSE, "fill_mode_close"),
         slippage=_slippage(raw.get("slippage", 0)),
         fee_per_contract=_fee_per_contract(raw.get("fee_per_contract", 0)),
+        day_loss_stop=_day_loss_stop(raw.get("day_loss_stop")),
+        day_profit_goal=_day_profit_goal(raw.get("day_profit_goal")),
     )
 
 
@@ -530,6 +538,49 @@ def _picks(raw: object) -> list[dict[str, object]]:
             row["slippage"] = _slippage(item["slippage"])
         rows.append(row)
     return rows
+
+
+def day_limit_points(spec: DeskSpec | None) -> tuple[float | None, float | None]:
+    """Session P&L limits in option points (YAML values are dollars)."""
+    if spec is None:
+        return None, None
+    loss = spec.day_loss_stop
+    goal = spec.day_profit_goal
+    loss_pts = None if loss is None else float(loss) / 100.0
+    goal_pts = None if goal is None else float(goal) / 100.0
+    return loss_pts, goal_pts
+
+
+def day_pnl_breached(pnl_points: float, loss_pts: float | None, goal_pts: float | None) -> str | None:
+    if loss_pts is not None and pnl_points <= loss_pts:
+        return "day_loss_stop"
+    if goal_pts is not None and pnl_points >= goal_pts:
+        return "day_profit_goal"
+    return None
+
+
+def _day_loss_stop(raw: object) -> int | None:
+    if raw in (None, ""):
+        return None
+    try:
+        value = int(raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"day_loss_stop must be an integer dollar amount 0 or less, got {raw!r}") from exc
+    if value > 0:
+        raise ValueError(f"day_loss_stop must be 0 or negative dollars, got {raw!r}")
+    return value
+
+
+def _day_profit_goal(raw: object) -> int | None:
+    if raw in (None, ""):
+        return None
+    try:
+        value = int(raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"day_profit_goal must be an integer dollar amount 0 or more, got {raw!r}") from exc
+    if value < 0:
+        raise ValueError(f"day_profit_goal must be 0 or more dollars, got {raw!r}")
+    return value
 
 
 def _fee_per_contract(raw: object) -> float:

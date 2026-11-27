@@ -2,8 +2,8 @@
 
 The auto overlay runs first. With em_regime on, the current EM $ picks the
 same row as the first-fly credit table, and a later reading can widen it
-again, until cookies. Cookies turns on under the EM% cut once enough flies
-are open, and then stays for the session. Otherwise the first-fly credit
+again, until cookies. Cookies turns on under the EM $ cut or the EM% cut
+once enough flies are open, and then stays for the session. Otherwise the first-fly credit
 band cannot widen. Picks that have turned on can tighten the regime. They
 cannot widen it. A clock pick stays on the tightest grid reached, from
 ±30/35 through ±25/30, ±20/25, ±15/20, ±10/15, ±7.5/10, to ±2.5/5. An EM or EM% pick follows
@@ -142,7 +142,7 @@ def apply_config_state(
         regime=book.regime,
         wings=width,
         stop=int(book.stop_pad),
-        f1_at=_f1_at(spec, book, em_pct, wall),
+        f1_at=_f1_at(spec, book, em_pct, wall, em_now),
         latest_wings=width,
         regime_latch=held if em_follow else (held or book.regime),
         pick_fired=frozenset(fired),
@@ -285,16 +285,14 @@ def _overlay(
 
     An owned print keeps the EM row only for this reading. The caller does
     not fold it into the tighten latch, so the next print can widen. Cookies
-    is not owned: the caller keeps it after EM% recovers. Credit stays
+    is not owned: the caller keeps it after the reading recovers. Credit stays
     capped by the desk regime.
     """
     auto = spec.auto
     if not _em_ready(wall):
         em_pct = None
         em_now = None
-    limit = auto.get("cookies_below")
-    need = int(auto.get("cookies_min_flies") or 0)
-    if limit is not None and em_pct is not None and float(em_pct) < float(limit) and len(book.active()) >= need:
+    if cookies_on(auto, em_pct=em_pct, em_now=em_now, open_flies=len(book.active())):
         book.regime = "cookies"
         return False
     if auto.get("em_regime") and em_now is not None:
@@ -307,6 +305,28 @@ def _overlay(
         return False
     book.regime = _clamp(scale_mode(float(credit)).name, _regime_cap(spec))
     return False
+
+
+def cookies_on(
+    auto: dict[str, object],
+    *,
+    em_pct: float | None,
+    em_now: float | None,
+    open_flies: int,
+) -> bool:
+    """True when enough flies are open and EM $ or EM% is under its cut.
+
+    Each cut is optional. A set cut applies only while that reading is present
+    and strictly under the level. Either cut is enough. No cut leaves cookies off.
+    """
+    need = int(auto.get("cookies_min_flies") or 0)
+    if open_flies < need:
+        return False
+    dollar = auto.get("cookies_below_em")
+    percent = auto.get("cookies_below_em_pct")
+    under_em = dollar is not None and em_now is not None and float(em_now) < float(dollar)
+    under_pct = percent is not None and em_pct is not None and float(em_pct) < float(percent)
+    return under_em or under_pct
 
 
 def _regime_cap(spec: DeskSpec) -> str | None:
@@ -385,14 +405,30 @@ def _trading_auto(spec: DeskSpec) -> bool:
     return spec.desk == "auto"
 
 
-def _f1_at(spec: DeskSpec, book: FlyBook, em_pct: float | None, wall: time) -> time | None:
-    below = spec.auto.get("f1_below")
+def _f1_at(
+    spec: DeskSpec,
+    book: FlyBook,
+    em_pct: float | None,
+    wall: time,
+    em_now: float | None = None,
+) -> time | None:
+    """Clock for the first fly, or None while an EM cut still holds it.
+
+    No cut leaves the clock alone. A set cut releases the fly only while that
+    reading is present and strictly under the level. Either cut is enough.
+    An open fly skips the hold. Both readings wait until the open EM is out.
+    """
+    dollar = spec.auto.get("f1_below_em")
+    percent = spec.auto.get("f1_below_em_pct")
     # Closed blotter rows do not count — only an active fly skips the EM hold.
-    if not _trading_auto(spec) or below is None or book.active():
+    if not _trading_auto(spec) or (dollar is None and percent is None) or book.active():
         return spec.f1_at
     if not _em_ready(wall):
         em_pct = None
-    if em_pct is None or float(em_pct) >= float(below):
+        em_now = None
+    under_em = dollar is not None and em_now is not None and float(em_now) < float(dollar)
+    under_pct = percent is not None and em_pct is not None and float(em_pct) < float(percent)
+    if not under_em and not under_pct:
         return None
     if spec.f1_at is not None and wall < spec.f1_at:
         return None

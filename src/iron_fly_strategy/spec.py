@@ -12,12 +12,12 @@ from iron_fly_strategy.rules import REGIME_LABELS
 WING_CHOICES = ("auto", "50", "40", "30", "25", "20", "15", "10")
 DEFAULT_SPEC = """\
 f1_at: "10:40"              # open the first fly at this clock
-f1_below: 80                # AND below this EM%, open the first fly
+f1_below_em_pct: 80         # AND below this EM%, open the first fly
 wings: 50                   # starting width; later steps can only narrow it
 regime: "±2.5/5"            # watch ±15, add at 20; credit regime cannot go wider
 stop: 0                     # drop at the credit breakeven (K ± credit)
 credit_regime: true         # after a 50-wide fill, the grid follows that credit
-cookies_below: 50           # under this EM%, switch to cookies and stay there
+cookies_below_em_pct: 50    # under this EM%, switch to cookies and stay there
 cookies_min_flies: 1        # need this many open flies to enter cookies
 follow_wings: true          # from 9:35, width tracks the 0.40 put and never widens
 wing_steps: [50, 30, 20]    # widths follow_wings may snap to
@@ -74,11 +74,13 @@ _REGIME = {
     "+-2.5/5": "ladder",
 }
 _AUTO = {
-    "f1_below",
+    "f1_below_em",
+    "f1_below_em_pct",
     "credit_regime",
     "em_regime",
     "em_latch",
-    "cookies_below",
+    "cookies_below_em",
+    "cookies_below_em_pct",
     "cookies_min_flies",
     "follow_wings",
     "wing_steps",
@@ -375,10 +377,14 @@ def _auto(raw: object) -> dict[str, object]:
     if extra:
         raise ValueError(f"unknown auto field {extra[0]}")
     out: dict[str, object] = {}
-    if "f1_below" in raw:
-        out["f1_below"] = _number(raw["f1_below"], "f1_below")
-    if "cookies_below" in raw:
-        out["cookies_below"] = _number(raw["cookies_below"], "cookies_below")
+    if "f1_below_em" in raw:
+        out["f1_below_em"] = _number(raw["f1_below_em"], "f1_below_em")
+    if "f1_below_em_pct" in raw:
+        out["f1_below_em_pct"] = _number(raw["f1_below_em_pct"], "f1_below_em_pct")
+    if "cookies_below_em" in raw:
+        out["cookies_below_em"] = _number(raw["cookies_below_em"], "cookies_below_em")
+    if "cookies_below_em_pct" in raw:
+        out["cookies_below_em_pct"] = _number(raw["cookies_below_em_pct"], "cookies_below_em_pct")
     if "cookies_min_flies" in raw:
         out["cookies_min_flies"] = _count(raw["cookies_min_flies"])
     if "credit_regime" in raw:

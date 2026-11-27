@@ -16,7 +16,7 @@ SPEC = """\
 regime: "±15/20"
 em_regime: true
 credit_regime: false
-cookies_below: 50
+cookies_below_em_pct: 50
 cookies_min_flies: 1
 stop: 0
 picks:
@@ -99,6 +99,66 @@ def test_missing_em_keeps_the_desk_regime_until_a_reading_arrives():
 
 def test_em_is_ignored_before_the_open_print():
     assert _apply(SPEC, em_now=30, wall=time(9, 30)).regime == "s3"
+
+
+def test_cookies_below_em_turns_on_while_em_pct_stays_high():
+    text = SPEC.replace("cookies_below_em_pct: 50", "cookies_below_em: 26")
+    book = FlyBook()
+    book.open_fly(6000, 22.0, 50, datetime(2026, 10, 16, 10, 40, tzinfo=_ET))
+    tight = _apply(text, em_now=25, em_pct=80, book=book)
+    assert tight.regime == "cookies"
+    quiet = _apply(text, em_now=26, em_pct=40, book=book)
+    assert quiet.regime == "s4"
+
+
+def test_either_cookies_cut_is_enough():
+    text = SPEC.replace("cookies_below_em_pct: 50", "cookies_below_em: 20\ncookies_below_em_pct: 50")
+    book = FlyBook()
+    book.open_fly(6000, 22.0, 50, datetime(2026, 10, 16, 10, 40, tzinfo=_ET))
+    assert _apply(text, em_now=30, em_pct=40, book=book).regime == "cookies"
+    assert _apply(text, em_now=19, em_pct=80, book=book).regime == "cookies"
+    assert _apply(text, em_now=30, em_pct=80, book=book).regime == "s5"
+
+
+def test_cookies_stays_off_without_a_cut():
+    text = SPEC.replace("cookies_below_em_pct: 50\n", "")
+    book = FlyBook()
+    book.open_fly(6000, 22.0, 50, datetime(2026, 10, 16, 10, 40, tzinfo=_ET))
+    assert _apply(text, em_now=10, em_pct=10, book=book).regime == "s1"
+    with pytest.raises(ValueError, match="cookies_below"):
+        parse_spec("cookies_below: 50\n")
+
+
+def test_f1_below_em_pct_holds_until_the_reading_is_under():
+    text = 'f1_at: "10:30"\nregime: "±30/35"\nf1_below_em_pct: 83\n'
+    assert _apply(text, em_now=70, em_pct=83).f1_at is None
+    assert _apply(text, em_now=70, em_pct=82.9).f1_at == time(10, 30)
+
+
+def test_f1_below_em_opens_while_em_pct_stays_high():
+    text = 'f1_at: "10:30"\nregime: "±30/35"\nf1_below_em: 25\n'
+    assert _apply(text, em_now=25, em_pct=40).f1_at is None
+    assert _apply(text, em_now=24.9, em_pct=90).f1_at == time(10, 30)
+
+
+def test_either_f1_cut_releases_the_first_fly():
+    text = 'f1_at: "10:30"\nregime: "±30/35"\nf1_below_em: 20\nf1_below_em_pct: 83\n'
+    assert _apply(text, em_now=30, em_pct=80).f1_at == time(10, 30)
+    assert _apply(text, em_now=19, em_pct=90).f1_at == time(10, 30)
+    assert _apply(text, em_now=30, em_pct=90).f1_at is None
+    assert _apply(text, em_now=10, em_pct=10, wall=time(9, 30)).f1_at is None
+    assert _apply(text, em_now=10, em_pct=10, wall=time(10, 0)).f1_at is None
+
+
+def test_f1_opens_on_the_clock_without_a_cut():
+    text = 'f1_at: "10:30"\nregime: "±30/35"\n'
+    assert _apply(text, em_now=90, em_pct=99).f1_at == time(10, 30)
+    book = FlyBook()
+    book.open_fly(6000, 22.0, 50, datetime(2026, 10, 16, 10, 40, tzinfo=_ET))
+    held = 'f1_at: "10:30"\nregime: "±30/35"\nf1_below_em_pct: 50\n'
+    assert _apply(held, em_now=90, em_pct=90, book=book).f1_at == time(10, 30)
+    with pytest.raises(ValueError, match="f1_below"):
+        parse_spec("f1_below: 83\n")
 
 
 def test_cookies_stays_on_after_em_pct_recovers():
